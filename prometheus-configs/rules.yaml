@@ -1,0 +1,11 @@
+groups:
+  - name: Workers Load Alerts
+    rules:
+      - alert: CpuUsageHighContinuously
+        expr: (sum(openstack_nova_vcpus_used) / sum(openstack_nova_vcpus) * 100) > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OpenStack workers have high CPU usage continuously"
+          description: "More than 50% of CPU used by OpenStack workers (value={{ $value }})."

@@ -1,0 +1,47 @@
+global:
+
+route:
+  receiver: telegram-alerts
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 1h
+
+  routes:
+  - receiver: 'scaling-webhook'
+    match:
+      alertname: 'CpuUsageHighContinuously'
+
+receivers:
+- name: telegram-alerts
+  telegram_configs:
+  - api_url: https://api.telegram.org
+    bot_token: ${bot_token}
+    chat_id: ${chat_id}
+    parse_mode: HTML
+    message: |-
+      {{ if eq .Status "firing" }}🔥 {{ end }}{{ if eq .Status "resolved" }}✅ {{ end }}<b>[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} on {{ .CommonLabels.instance }}</b>
+      {{ range .Alerts }}
+      {{$severity := .Labels.severity -}}
+      {{ if eq $severity "warning" -}}
+      <b>Severity:</b> {{$severity}} ⚠️
+      {{ else if eq $severity "critical" -}}
+      <b>Severity:</b> {{$severity}} 🚨
+      {{ else -}}
+      <b>Severity:</b> {{$severity}} 😱
+      {{ end -}}
+      {{$status := .Status -}}
+      {{ if eq $status "firing" -}}
+      <b>Date/Time:</b> {{ .StartsAt.Format "Mon 02 Jan 15:04:05 MST 2006" }}
+      {{ else -}}
+      <b>Date/Time:</b> {{ .EndsAt.Format "Mon 02 Jan 15:04:05 MST 2006" }}
+      {{ end -}}
+      <b>Alert:</b> {{ .Annotations.title }}
+      <b>Description:</b> {{ .Annotations.description }}
+      <b>Details:</b>
+        {{ range .Labels.SortedPairs }} • {{ .Name | title }}: {{ .Value }}
+        {{ end }}
+      {{ end }}
+- name: scaling-webhook
+  webhook_configs:
+  - url: 127.0.0.1:8080

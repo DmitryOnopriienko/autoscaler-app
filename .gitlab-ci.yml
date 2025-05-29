@@ -1,0 +1,57 @@
+stages:
+  - echo
+  - autoscale
+
+echo:
+  stage: echo
+  script:
+    echo "Hello World!"
+
+autoscale:
+  stage: autoscale
+  image: ubuntu:24.04
+  before_script:
+    - apt-get update && apt-get install -y git
+    - apt-get install -y bash coreutils
+    - git config user.email "d.onopriienko.tv12@kpi.ua"
+    - git config user.name "ci-bot"
+    - git checkout "${CI_DEFAULT_BRANCH}"
+    - git pull origin "${CI_DEFAULT_BRANCH}"
+  script:
+    - TFVARS_FILE="resources/terraform.tfvars"
+    - VARIABLE_NAME="openstack_worker_nodes_count"
+    - echo "Executing autoscale job..."
+    - |
+      if [ ! -f "${TFVARS_FILE}" ]; then
+        echo "ERROR: ${TFVARS_FILE} not found!"
+        exit 1
+      fi
+    - CURRENT_VALUE=$(grep -E "^\s*${VARIABLE_NAME}\s*=" "${TFVARS_FILE}" | awk -F'=' '{print $2}' | tr -d ' "')
+    - |
+      if [ -z "${CURRENT_VALUE}" ] || ! [[ "${CURRENT_VALUE}" =~ ^[0-9]+$ ]]; then
+        echo "ERROR: Could not find or parse '${VARIABLE_NAME}' in ${TFVARS_FILE}, or it's not a number."
+        echo "Found value: '${CURRENT_VALUE}'"
+        exit 1
+      fi
+    - |
+      if [ "$SCALE_DIRECTION" == "up" ]; then
+        NEW_VALUE=$((CURRENT_VALUE * 2))
+      elif [ "$SCALE_DIRECTION" == "down" ]; then
+        NEW_VALUE=$((CURRENT_VALUE / 2))
+      else
+        echo "Invalid SCALE_DIRECTION value. Use 'up' or 'down'."
+        exit 1
+      fi
+    - sed -i -E "s/^(\s*${VARIABLE_NAME}\s*=\s*)[0-9]+/\1${NEW_VALUE}/" "${TFVARS_FILE}"
+    - |
+      if git diff --quiet "${TFVARS_FILE}"; then
+        echo "No changes to ${TFVARS_FILE}. Value might already be the target or sed failed."
+      else
+        echo "Changes detected in ${TFVARS_FILE}. Committing and pushing..."
+        git add "${TFVARS_FILE}"
+        git commit -m "CI: Auto-scale ${VARIABLE_NAME} to ${NEW_VALUE}"
+        git push "https://oauth2:$ACCESS_TOKEN@${CI_SERVER_HOST}/DmitryOnopriienkoTV12/ci-test.git" "HEAD:${CI_DEFAULT_BRANCH}"
+        echo "Changes pushed to ${CI_DEFAULT_BRANCH}."
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "trigger" && $SCALE_DIRECTION != null

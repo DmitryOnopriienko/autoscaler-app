@@ -1,0 +1,6 @@
+spring.application.name: autoscaler-app
+gitlab:
+  provider: "gitlab.com"
+  project-id: YOUR_GITLAB_PROJECT_ID
+  access-token: "YOUR_GITLAB_ACCESS_TOKEN"
+  default-branch: "main"
