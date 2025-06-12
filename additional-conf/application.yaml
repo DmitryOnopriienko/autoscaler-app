@@ -1,0 +1,5 @@
+gitlab:
+  provider: "gitlab.sefl.com.ua"
+  project-id: 777
+  access-token: "glptt-50111e70123777000000000000"
+  default-branch: "autoscaling-ci"

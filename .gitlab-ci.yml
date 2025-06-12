@@ -5,7 +5,8 @@ stages:
 echo:
   stage: echo
   script:
-    echo "Hello World!"
+    - echo "Starting autoscale job..."
+    - echo "SCALING DIRECTION - ${SCALE_DIRECTION}"
 
 autoscale:
   stage: autoscale
@@ -13,12 +14,12 @@ autoscale:
   before_script:
     - apt-get update && apt-get install -y git
     - apt-get install -y bash coreutils
-    - git config user.email "d.onopriienko.tv12@kpi.ua"
+    - git config user.email "autoscaling-bot@kpi.ua"
     - git config user.name "ci-bot"
     - git checkout "${CI_DEFAULT_BRANCH}"
     - git pull origin "${CI_DEFAULT_BRANCH}"
   script:
-    - TFVARS_FILE="resources/terraform.tfvars"
+    - TFVARS_FILE="compute/terraform.tfvars"
     - VARIABLE_NAME="openstack_worker_nodes_count"
     - echo "Executing autoscale job..."
     - |
@@ -35,11 +36,16 @@ autoscale:
       fi
     - |
       if [ "$SCALE_DIRECTION" == "up" ]; then
-        NEW_VALUE=$((CURRENT_VALUE * 2))
+        NEW_VALUE=$((CURRENT_VALUE + 1))
       elif [ "$SCALE_DIRECTION" == "down" ]; then
-        NEW_VALUE=$((CURRENT_VALUE / 2))
+        NEW_VALUE=$((CURRENT_VALUE - 1))
       else
         echo "Invalid SCALE_DIRECTION value. Use 'up' or 'down'."
+        exit 1
+      fi
+    - |
+      if ! { [ $NEW_VALUE -gt 2 ] || [ "$SCALE_DIRECTION" == "up" ]; }; then
+        echo "ERROR: Cannot scale down below minimum threshold. NEW_VALUE must be greater than 3 or scaling direction must be 'up'."
         exit 1
       fi
     - sed -i -E "s/^(\s*${VARIABLE_NAME}\s*=\s*)[0-9]+/\1${NEW_VALUE}/" "${TFVARS_FILE}"
@@ -50,7 +56,7 @@ autoscale:
         echo "Changes detected in ${TFVARS_FILE}. Committing and pushing..."
         git add "${TFVARS_FILE}"
         git commit -m "CI: Auto-scale ${VARIABLE_NAME} to ${NEW_VALUE}"
-        git push "https://oauth2:$ACCESS_TOKEN@${CI_SERVER_HOST}/DmitryOnopriienkoTV12/ci-test.git" "HEAD:${CI_DEFAULT_BRANCH}"
+        git push "https://oauth2:$TF_VAR_gitlab_token@${CI_SERVER_HOST}/infra/openstack/openstack.git" "HEAD:${CI_DEFAULT_BRANCH}"
         echo "Changes pushed to ${CI_DEFAULT_BRANCH}."
       fi
   rules:

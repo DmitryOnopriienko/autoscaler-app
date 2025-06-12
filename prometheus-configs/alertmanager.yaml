@@ -44,4 +44,4 @@ receivers:
       {{ end }}
 - name: scaling-webhook
   webhook_configs:
-  - url: 127.0.0.1:8080
+  - url: 127.0.0.1:8080/alert/prometheus/high-cpu
